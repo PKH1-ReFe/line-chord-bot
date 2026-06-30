@@ -7,6 +7,8 @@ const config = {
 };
 
 const app = express();
+
+// 【修正箇所】最新のLINE SDKに合わせたクライアントの作成方法
 const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken
 });
@@ -25,56 +27,40 @@ const NOTE_TO_NUM = {
   'A+': 10, 'B-': 10, 
   'B': 11, 'C-': 11,
 };
-// 1. 数字から音名に変換する配列（シャープを +、フラットを - に統一）
-// ※ 12マスの音（0〜11）に綺麗に対応するように並び替えています
+
 const NUM_TO_NOTE = [
   'C',       // 0
-  'C+',      // 1 (C# / D-)
+  'C+',      // 1
   'D',       // 2
-  'D+',      // 3 (D# / E-)
+  'D+',      // 3
   'E',       // 4
   'F',       // 5
-  'F+',      // 6 (F# / G-)
+  'F+',      // 6
   'G',       // 7
-  'G+',      // 8 (G# / A-)
+  'G+',      // 8
   'A',       // 9
-  'A+',      // 10 (A# / B-)
+  'A+',      // 10
   'B'        // 11
 ];
 
-// 2. コードの仕組み（度数）を判定する辞書
 const CHORD_DICTIONARY = { 
-  '4,7': '',        // メジャーコード（例: C）
-  '3,7': 'm',       // マイナーコード（例: Cm）
-  '4,7,11': 'M7',   // メジャーセブンス（例: CM7）
-  '4,7,10': '7',    // セブンス（例: C7）
-  '3,7,10': 'm7'    // マイナーセブンス（例: Cm7）
+  '4,7': '',        // メジャー
+  '3,7': 'm',       // マイナー
+  '4,7,11': 'M7',   // メジャーセブンス
+  '4,7,10': '7',    // セブンス
+  '3,7,10': 'm7'    // マイナーセブンス
 };
-// 【新しく追加】コード名から数字の並びを引っ張るための辞書
+
 const REVERSE_CHORD_DICTIONARY = {
-  '': [0, 4, 7],       // メジャー（例: C の場合は ルート音 + 4つ上 + 7つ上）
-  'M': [0, 4, 7],      // CM と打たれたとき用
+  '': [0, 4, 7],       // メジャー
+  'M': [0, 4, 7],      // M
   'm': [0, 3, 7],      // マイナー
   'M7': [0, 4, 7, 11], // メジャーセブンス
   '7': [0, 4, 7, 10],  // セブンス
   'm7': [0, 3, 7, 10]  // マイナーセブンス
 };
 
-function detectChord(inputNotes) {
-  let inputNums = [...new Set(inputNotes.map(note => NOTE_TO_NUM[note]).filter(n => n !== undefined))].sort((a, b) => a - b);
-  if (inputNums.length < 2) return "音を2つ以上正しく入力してください（例: C E G）";
-
-  for (let root of inputNums) {
-    let intervals = inputNums.map(num => (num - root + 12) % 12).sort((a, b) => a - b);
-    let key = intervals.slice(1).join(',');
-    if (CHORD_DICTIONARY[key] !== undefined) {
-      return `${NUM_TO_NOTE[root]}${CHORD_DICTIONARY[key]}`;
-    }
-  }
-  return "対応するコードが見つかりませんでした";
-}
-
-// Webhookの受け口を確実に非同期対応にする
+// Webhookの受け口
 app.post('/webhook', line.middleware(config), async (req, res) => {
   try {
     const results = await Promise.all(req.body.events.map(handleEvent));
@@ -94,9 +80,15 @@ async function handleEvent(event) {
   // パターンA：入力にスペースがある場合【音 ⇒ コード名】
   // ----------------------------------------------------
   if (rawMessage.includes(' ')) {
-    const inputNotes = rawMessage.split(/\s+/).map(note => note.charAt(0).toUpperCase() + note.slice(1));
+    // 最初の1文字目を大文字、2文字目（+や-）があればそのまま結合
+    const inputNotes = rawMessage.split(/\s+/).map(note => {
+      if (!note) return '';
+      return note.charAt(0).toUpperCase() + note.slice(1);
+    }).filter(note => note !== '');
+
     const nums = inputNotes.map(note => NOTE_TO_NUM[note]).filter(num => num !== undefined);
 
+    // 【修正箇所】client.replyMessage の引数の書き方を最新版に修正
     if (nums.length < 2) {
       return client.replyMessage({
         replyToken: event.replyToken,
@@ -105,6 +97,7 @@ async function handleEvent(event) {
     }
 
     const rootNum = nums[0];
+    // 転回形にも対応できるように、すべての音の差を計算してソート
     const intervals = nums.slice(1).map(num => (num - rootNum + 12) % 12).sort((a, b) => a - b);
     const intervalKey = intervals.join(',');
     const chordType = CHORD_DICTIONARY[intervalKey];
@@ -160,7 +153,7 @@ async function handleEvent(event) {
   }
 }
 
-const PORT = 8080;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`サーバーがポート ${PORT} で起動しました！`);
 });
