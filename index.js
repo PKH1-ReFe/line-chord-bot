@@ -28,20 +28,11 @@ const NOTE_TO_NUM = {
   'B': 11, 'C-': 11,
 };
 
-const NUM_TO_NOTE = [
-  'C',       // 0
-  'C+',      // 1
-  'D',       // 2
-  'D+',      // 3
-  'E',       // 4
-  'F',       // 5
-  'F+',      // 6
-  'G',       // 7
-  'G+',      // 8
-  'A',       // 9
-  'A+',      // 10
-  'B'        // 11
-];
+// ♯（+）ベースの音名リスト（これは前からあったもの）
+const SHARP_NOTES = ['C', 'C+', 'D', 'D+', 'E', 'F', 'F+', 'G', 'G+', 'A', 'A+', 'B'];
+
+// ★ここを追加！ ♭（-）ベースの音名リスト
+const FLAT_NOTES  = ['C', 'D-', 'D', 'E-', 'E', 'F', 'G-', 'G', 'A-', 'A', 'B-', 'B'];
 
 const CHORD_DICTIONARY = { 
   '4,7': '',        // メジャー
@@ -80,7 +71,6 @@ async function handleEvent(event) {
   // パターンA：入力にスペースがある場合【音 ⇒ コード名】
   // ----------------------------------------------------
   if (rawMessage.includes(' ')) {
-    // 最初の1文字目を大文字、2文字目（+や-）があればそのまま結合
     const inputNotes = rawMessage.split(/\s+/).map(note => {
       if (!note) return '';
       return note.charAt(0).toUpperCase() + note.slice(1);
@@ -88,7 +78,6 @@ async function handleEvent(event) {
 
     const nums = inputNotes.map(note => NOTE_TO_NUM[note]).filter(num => num !== undefined);
 
-    // 【修正箇所】client.replyMessage の引数の書き方を最新版に修正
     if (nums.length < 2) {
       return client.replyMessage({
         replyToken: event.replyToken,
@@ -97,14 +86,17 @@ async function handleEvent(event) {
     }
 
     const rootNum = nums[0];
-    // 転回形にも対応できるように、すべての音の差を計算してソート
     const intervals = nums.slice(1).map(num => (num - rootNum + 12) % 12).sort((a, b) => a - b);
     const intervalKey = intervals.join(',');
     const chordType = CHORD_DICTIONARY[intervalKey];
 
+    // ★追加：入力された最初の音がフラット表記（-）なら、出力もフラット用のリストを使う
+    const isFlatMode = inputNotes[0].includes('-');
+    const currentNoteMap = isFlatMode ? FLAT_NOTES : SHARP_NOTES;
+
     let replyText = '';
     if (chordType !== undefined) {
-      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${NUM_TO_NOTE[rootNum]}${chordType}`;
+      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${currentNoteMap[rootNum]}${chordType}`;
     } else {
       replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: 対応するコードが見つかりませんでした`;
     }
@@ -135,9 +127,13 @@ async function handleEvent(event) {
     const intervals = REVERSE_CHORD_DICTIONARY[type];
 
     if (rootNum !== undefined && intervals) {
+      // ★追加：指定されたコードのルートがフラット（-）なら、構成音もフラット表記にする
+      const isFlatMode = formattedRoot.includes('-');
+      const currentNoteMap = isFlatMode ? FLAT_NOTES : SHARP_NOTES;
+
       const resultNotes = intervals.map(interval => {
         const noteNum = (rootNum + interval) % 12;
-        return NUM_TO_NOTE[noteNum];
+        return currentNoteMap[noteNum]; // 判定されたモードの音名を返す
       });
 
       return client.replyMessage({
