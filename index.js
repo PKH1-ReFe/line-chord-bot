@@ -90,49 +90,72 @@ async function handleEvent(event) {
 
   const rawMessage = event.message.text.trim();
 
-  // ① もし入力にスペースが含まれていたら、今まで通りの「音 ⇒ コード判定」
+  // ----------------------------------------------------
+  // パターンA：入力にスペースがある場合【音 ⇒ コード名】
+  // ----------------------------------------------------
   if (rawMessage.includes(' ')) {
-    // === ここには今までの「音からコードを当てる処理」をそのまま入れます ===
-    // (最後のリプライで判定結果を返す)
-    return;
+    const inputNotes = rawMessage.split(/\s+/).map(note => note.charAt(0).toUpperCase() + note.slice(1));
+    const nums = inputNotes.map(note => NOTE_TO_NUM[note]).filter(num => num !== undefined);
+
+    if (nums.length < 2) {
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: 'text', text: '【判定結果】\n音を2つ以上正しく入力してください (例: C E G)' }]
+      });
+    }
+
+    const rootNum = nums[0];
+    const intervals = nums.slice(1).map(num => (num - rootNum + 12) % 12).sort((a, b) => a - b);
+    const intervalKey = intervals.join(',');
+    const chordType = CHORD_DICTIONARY[intervalKey];
+
+    let replyText = '';
+    if (chordType !== undefined) {
+      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${NUM_TO_NOTE[rootNum]}${chordType}`;
+    } else {
+      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: 対応するコードが見つかりませんでした`;
+    }
+
+    return client.replyMessage({
+      replyToken: event.replyToken,
+      messages: [{ type: 'text', text: replyText }]
+    });
   } 
   
-  // ② スペースがない場合は「コード名 ⇒ 音の割り出し（逆引き）」とみなす！
+  // ----------------------------------------------------
+  // パターンB：入力にスペースがない場合【コード名 ⇒ 音（逆引き）】
+  // ----------------------------------------------------
   else {
-    // 1文字目（ルート音）と、2文字目以降（mや7などのコードタイプ）に分ける
-    // 例: "Cm7" なら root = "C", type = "m7" / "C+" なら root = "C+", type = ""
     let root = '';
     let type = '';
 
     if (rawMessage.length > 1 && (rawMessage[1] === '+' || rawMessage[1] === '-')) {
-      root = rawMessage.substring(0, 2); // C+ や D- などの場合
+      root = rawMessage.substring(0, 2);
       type = rawMessage.substring(2);
     } else {
-      root = rawMessage.substring(0, 1); // C や D などの場合
+      root = rawMessage.substring(0, 1);
       type = rawMessage.substring(1);
     }
 
-    // ルート音を数字に変換
-    const rootNum = NOTE_TO_NUM[root.toUpperCase()]; // 大文字小文字対策
-    // 逆引き辞書からコードの仕組み（度数）を取得
+    const formattedRoot = root.charAt(0).toUpperCase() + root.slice(1);
+    const rootNum = NOTE_TO_NUM[formattedRoot];
     const intervals = REVERSE_CHORD_DICTIONARY[type];
 
-    // 辞書に存在すれば、音名を計算して並べる
     if (rootNum !== undefined && intervals) {
       const resultNotes = intervals.map(interval => {
-        // ルートの数字に度数を足して、12を超えたらループさせる処理
         const noteNum = (rootNum + interval) % 12;
         return NUM_TO_NOTE[noteNum];
       });
 
-      // 結果を「C E G」のような文字列にする
-      const replyText = `【構成音】\n${rawMessage} の構成音は: ${resultNotes.join(' ')}`;
-      
-      // LINEに返信する処理（お使いのLINE返信コードをここに）
-      await client.replyMessage(event.replyToken, { type: 'text', text: replyText });
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: 'text', text: `【構成音】\n${rawMessage} の構成音は:\n${resultNotes.join(' ')}` }]
+      });
     } else {
-      // コード名が見つからなかった場合
-      await client.replyMessage(event.replyToken, { type: 'text', text: '対応するコードが見つかりませんでした' });
+      return client.replyMessage({
+        replyToken: event.replyToken,
+        messages: [{ type: 'text', text: '対応するコードが見つかりませんでした' }]
+      });
     }
   }
 }
