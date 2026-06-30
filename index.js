@@ -11,8 +11,8 @@ const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken
 });
 
-const NOTE_TO_NUM = { 'C':0, 'C#':1, 'Db':1, 'D':2, 'D#':3, 'Eb':3, 'E':4, 'F':5, 'F#':6, 'Gb':6, 'G':7, 'G#':8, 'Ab':8, 'A':9, 'A#':10, 'Bb':10, 'B':11 };
-const NUM_TO_NOTE = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const NOTE_TO_NUM = { 'C':0, 'Cs':1, 'Df':1, 'D':2, 'Ds':3, 'Ef':3, 'E':4, 'F':5, 'Fs':6, 'Gf':6, 'G':7, 'Gs':8, 'Af':8, 'A':9, 'As':10, 'Bf':10, 'B':11 };
+const NUM_TO_NOTE = ['C', 'Cs', 'D', 'Ds', 'E', 'F', 'Fs', 'G', 'Gs', 'A', 'As', 'B'];
 const CHORD_DICTIONARY = { '4,7': '', '3,7': 'm', '4,7,11': 'M7', '4,7,10': '7', '3,7,10': 'm7' };
 
 function detectChord(inputNotes) {
