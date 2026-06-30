@@ -128,12 +128,16 @@ async function handleEvent(event) {
   // ----------------------------------------------------
   // パターンA：入力にスペースがある場合【音 ⇒ コード名】
   // ----------------------------------------------------
-  if (rawMessage.includes(' ')) {
+if (rawMessage.includes(' ')) {
     const inputNotes = rawMessage.split(/\s+/).map(note => {
       if (!note) return '';
       return note.charAt(0).toUpperCase() + note.slice(1);
     }).filter(note => note !== '');
 
+    // ★ここを追加！一番左（最初）に入力された音を「ベース音（最低音）」としてキープしておく
+    const baseNote = inputNotes[0];
+
+    // 入力された音をすべて数字に変換
     const nums = inputNotes.map(note => NOTE_TO_NUM[note]).filter(num => num !== undefined);
 
     if (nums.length < 2) {
@@ -143,18 +147,30 @@ async function handleEvent(event) {
       });
     }
 
-    const rootNum = nums[0];
-    const intervals = nums.slice(1).map(num => (num - rootNum + 12) % 12).sort((a, b) => a - b);
+    // ★ここを変更！順不同に対応するため、一番低い音（数字が一番小さい音）を「コードのルート」として判定する
+    const sortedNums = [...new Set(nums)].sort((a, b) => a - b);
+    const rootNum = sortedNums[0]; // ソートした中の一番低い音
+
+    // ルート音からの差（度数）を計算
+    const intervals = sortedNums.slice(1).map(num => (num - rootNum + 12) % 12).sort((a, b) => a - b);
     const intervalKey = intervals.join(',');
     const chordType = CHORD_DICTIONARY[intervalKey];
 
-    // ★追加：入力された最初の音がフラット表記（-）なら、出力もフラット用のリストを使う
+    // 出力用のシャープ/フラットの判定
     const isFlatMode = inputNotes[0].includes('-');
     const currentNoteMap = isFlatMode ? FLAT_NOTES : SHARP_NOTES;
 
     let replyText = '';
     if (chordType !== undefined) {
-      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${currentNoteMap[rootNum]}${chordType}`;
+      const chordRoot = currentNoteMap[rootNum]; // 判定されたコードの元々のルート音
+      
+      // ★ここを追加！もし「実際に最初に入力された最低音」と「コード本来のルート音」が違ったら分数コードにする
+      let finalChordName = `${chordRoot}${chordType}`;
+      if (baseNote !== chordRoot) {
+        finalChordName = `${finalChordName}/${baseNote}`; // 例: C/E の形にする
+      }
+
+      replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${finalChordName}`;
     } else {
       replyText = `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: 対応するコードが見つかりませんでした`;
     }
@@ -163,7 +179,7 @@ async function handleEvent(event) {
       replyToken: event.replyToken,
       messages: [{ type: 'text', text: replyText }]
     });
-  } 
+  }
   
   // ----------------------------------------------------
   // パターンB：入力にスペースがない場合【コード名 ⇒ 音（逆引き）】
