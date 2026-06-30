@@ -50,6 +50,15 @@ const CHORD_DICTIONARY = {
   '4,7,10': '7',    // セブンス（例: C7）
   '3,7,10': 'm7'    // マイナーセブンス（例: Cm7）
 };
+// 【新しく追加】コード名から数字の並びを引っ張るための辞書
+const REVERSE_CHORD_DICTIONARY = {
+  '': [0, 4, 7],       // メジャー（例: C の場合は ルート音 + 4つ上 + 7つ上）
+  'M': [0, 4, 7],      // CM と打たれたとき用
+  'm': [0, 3, 7],      // マイナー
+  'M7': [0, 4, 7, 11], // メジャーセブンス
+  '7': [0, 4, 7, 10],  // セブンス
+  'm7': [0, 3, 7, 10]  // マイナーセブンス
+};
 
 function detectChord(inputNotes) {
   let inputNums = [...new Set(inputNotes.map(note => NOTE_TO_NUM[note]).filter(n => n !== undefined))].sort((a, b) => a - b);
@@ -79,35 +88,51 @@ app.post('/webhook', line.middleware(config), async (req, res) => {
 async function handleEvent(event) {
   if (event.type !== 'message' || event.message.type !== 'text') return null;
 
-  const userText = event.message.text.toUpperCase();
+  const rawMessage = event.message.text.trim();
+
+  // ① もし入力にスペースが含まれていたら、今まで通りの「音 ⇒ コード判定」
+  if (rawMessage.includes(' ')) {
+    // === ここには今までの「音からコードを当てる処理」をそのまま入れます ===
+    // (最後のリプライで判定結果を返す)
+    return;
+  } 
   
-  // スペースがあってもなくても1文字ずつバラす魔法の処理
-  const inputNotes = userText.includes(' ') || userText.includes(',') 
-    ? userText.split(/[\s,]+/) 
-    : userText.match(/[A-G](#|b)?/g) || [];
+  // ② スペースがない場合は「コード名 ⇒ 音の割り出し（逆引き）」とみなす！
+  else {
+    // 1文字目（ルート音）と、2文字目以降（mや7などのコードタイプ）に分ける
+    // 例: "Cm7" なら root = "C", type = "m7" / "C+" なら root = "C+", type = ""
+    let root = '';
+    let type = '';
 
-  const resultChord = detectChord(inputNotes);
-
-  try {
-    console.log(`【送信試行】 replyToken: ${event.replyToken} / メッセージ: ${resultChord}`);
-    
-    const response = await client.replyMessage({
-      replyToken: event.replyToken,
-      messages: [{ 
-        type: 'text', 
-        text: `【判定結果】\n入力: ${inputNotes.join(', ')}\nコード: ${resultChord}` 
-      }]
-    });
-    
-    console.log("【送信成功！】LINEへの返信が完了しました。");
-    return response;
-  } catch (error) {
-    // エラーの中身を極限まで分解して画面に出す
-    console.error("【LINE送信エラー詳細】:");
-    if (error.response && error.response.data) {
-      console.error(JSON.stringify(error.response.data, null, 2));
+    if (rawMessage.length > 1 && (rawMessage[1] === '+' || rawMessage[1] === '-')) {
+      root = rawMessage.substring(0, 2); // C+ や D- などの場合
+      type = rawMessage.substring(2);
     } else {
-      console.error(error);
+      root = rawMessage.substring(0, 1); // C や D などの場合
+      type = rawMessage.substring(1);
+    }
+
+    // ルート音を数字に変換
+    const rootNum = NOTE_TO_NUM[root.toUpperCase()]; // 大文字小文字対策
+    // 逆引き辞書からコードの仕組み（度数）を取得
+    const intervals = REVERSE_CHORD_DICTIONARY[type];
+
+    // 辞書に存在すれば、音名を計算して並べる
+    if (rootNum !== undefined && intervals) {
+      const resultNotes = intervals.map(interval => {
+        // ルートの数字に度数を足して、12を超えたらループさせる処理
+        const noteNum = (rootNum + interval) % 12;
+        return NUM_TO_NOTE[noteNum];
+      });
+
+      // 結果を「C E G」のような文字列にする
+      const replyText = `【構成音】\n${rawMessage} の構成音は: ${resultNotes.join(' ')}`;
+      
+      // LINEに返信する処理（お使いのLINE返信コードをここに）
+      await client.replyMessage(event.replyToken, { type: 'text', text: replyText });
+    } else {
+      // コード名が見つからなかった場合
+      await client.replyMessage(event.replyToken, { type: 'text', text: '対応するコードが見つかりませんでした' });
     }
   }
 }
