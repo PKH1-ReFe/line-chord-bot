@@ -25,8 +25,31 @@ const NOTE_TO_NUM = {
   'A+': 10, 'B-': 10, 
   'B': 11, 'C-': 11,
 };
-const NUM_TO_NOTE = ['C', 'Cs', 'D', 'Ds', 'E', 'F', 'Fs', 'G', 'Gs', 'A', 'As', 'B'];
-const CHORD_DICTIONARY = { '4,7': '', '3,7': 'm', '4,7,11': 'M7', '4,7,10': '7', '3,7,10': 'm7' };
+// 1. 数字から音名に変換する配列（シャープを +、フラットを - に統一）
+// ※ 12マスの音（0〜11）に綺麗に対応するように並び替えています
+const NUM_TO_NOTE = [
+  'C',       // 0
+  'C+',      // 1 (C# / D-)
+  'D',       // 2
+  'D+',      // 3 (D# / E-)
+  'E',       // 4
+  'F',       // 5
+  'F+',      // 6 (F# / G-)
+  'G',       // 7
+  'G+',      // 8 (G# / A-)
+  'A',       // 9
+  'A+',      // 10 (A# / B-)
+  'B'        // 11
+];
+
+// 2. コードの仕組み（度数）を判定する辞書
+const CHORD_DICTIONARY = { 
+  '4,7': '',        // メジャーコード（例: C）
+  '3,7': 'm',       // マイナーコード（例: Cm）
+  '4,7,11': 'M7',   // メジャーセブンス（例: CM7）
+  '4,7,10': '7',    // セブンス（例: C7）
+  '3,7,10': 'm7'    // マイナーセブンス（例: Cm7）
+};
 
 function detectChord(inputNotes) {
   let inputNums = [...new Set(inputNotes.map(note => NOTE_TO_NUM[note]).filter(n => n !== undefined))].sort((a, b) => a - b);
