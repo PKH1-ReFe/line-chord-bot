@@ -10,7 +10,7 @@ const app = express();
 
 const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken
-});
+});     //テスト
 
 const NOTE_TO_NUM = { 
   'C': 0, 'B+': 0, 'C+': 1, 'D-': 1, 'D': 2, 'D+': 3, 'E-': 3, 'E': 4, 'F-': 4,
