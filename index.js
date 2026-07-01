@@ -184,16 +184,30 @@ if (rawMessage.includes(' ')) {
   // ----------------------------------------------------
   // パターンB：入力にスペースがない場合【コード名 ⇒ 音（逆引き）】
   // ----------------------------------------------------
+    // ----------------------------------------------------
+  // パターンB：入力にスペースがない場合【コード名 ⇒ 音（逆引き）】
+  // ----------------------------------------------------
   else {
+    let inputChord = rawMessage;
+    let slashBase = ''; // スラッシュの後ろのベース音をキープする変数
+
+    // ★ここを追加！ もし入力に「/」が含まれていたら、コードとベース音に切り分ける
+    if (inputChord.includes('/')) {
+      const parts = inputChord.split('/');
+      inputChord = parts[0]; // スラッシュの前（例: C や F）
+      slashBase = parts[1].charAt(0).toUpperCase() + parts[1].slice(1); // スラッシュの後ろ（例: E や G）
+    }
+
     let root = '';
     let type = '';
 
-    if (rawMessage.length > 1 && (rawMessage[1] === '+' || rawMessage[1] === '-')) {
-      root = rawMessage.substring(0, 2);
-      type = rawMessage.substring(2);
+    // ルート音の切り出し（切り分けた inputChord を使う）
+    if (inputChord.length > 1 && (inputChord[1] === '+' || inputChord[1] === '-')) {
+      root = inputChord.substring(0, 2);
+      type = inputChord.substring(2);
     } else {
-      root = rawMessage.substring(0, 1);
-      type = rawMessage.substring(1);
+      root = inputChord.substring(0, 1);
+      type = inputChord.substring(1);
     }
 
     const formattedRoot = root.charAt(0).toUpperCase() + root.slice(1);
@@ -201,14 +215,23 @@ if (rawMessage.includes(' ')) {
     const intervals = REVERSE_CHORD_DICTIONARY[type];
 
     if (rootNum !== undefined && intervals) {
-      // ★追加：指定されたコードのルートがフラット（-）なら、構成音もフラット表記にする
-      const isFlatMode = formattedRoot.includes('-');
+      // 指定されたコードのルート（またはスラッシュベース）がフラットならフラットモードにする
+      const isFlatMode = formattedRoot.includes('-') || slashBase.includes('-');
       const currentNoteMap = isFlatMode ? FLAT_NOTES : SHARP_NOTES;
 
-      const resultNotes = intervals.map(interval => {
+      // 通常の構成音を計算
+      let resultNotes = intervals.map(interval => {
         const noteNum = (rootNum + interval) % 12;
-        return currentNoteMap[noteNum]; // 判定されたモードの音名を返す
+        return currentNoteMap[noteNum];
       });
+
+      // ★ここを追加！ 分数コード（/ があった）の場合の並び替え処理
+      if (slashBase) {
+        // 構成音の中からベース音と同じ音を探して取り除く
+        resultNotes = resultNotes.filter(note => note !== slashBase);
+        // ベース音を一番左（最初）にくっつける
+        resultNotes.unshift(slashBase);
+      }
 
       return client.replyMessage({
         replyToken: event.replyToken,
@@ -221,9 +244,40 @@ if (rawMessage.includes(' ')) {
       });
     }
   }
-}
+
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`サーバーがポート ${PORT} で起動しました！`);
-});
+});      // ★【修正版】分数コードの並び替え処理
+      if (slashBase) {
+        const baseNum = NOTE_TO_NUM[slashBase];
+        
+        // 1. ベース音以外の音を、ベース音から数えて近い（低い）順に並び替える
+        const remainingNotes = resultNotes
+          .filter(note => note !== slashBase)
+          .sort((a, b) => {
+            const distA = (NOTE_TO_NUM[a] - baseNum + 12) % 12;
+            const distB = (NOTE_TO_NUM[b] - baseNum + 12) % 12;
+            return distA - distB;
+          });
+        
+        // 2. 先頭にベース音を置いて合体！
+        resultNotes = [slashBase, ...remainingNotes];
+      }
+      // ★【修正版】分数コードの並び替え処理
+      if (slashBase) {
+        const baseNum = NOTE_TO_NUM[slashBase];
+        
+        // 1. ベース音以外の音を、ベース音から数えて近い（低い）順に並び替える
+        const remainingNotes = resultNotes
+          .filter(note => note !== slashBase)
+          .sort((a, b) => {
+            const distA = (NOTE_TO_NUM[a] - baseNum + 12) % 12;
+            const distB = (NOTE_TO_NUM[b] - baseNum + 12) % 12;
+            return distA - distB;
+          });
+        
+        // 2. 先頭にベース音を置いて合体！
+        resultNotes = [slashBase, ...remainingNotes];
+      }
