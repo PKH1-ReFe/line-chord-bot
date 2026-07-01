@@ -7,7 +7,7 @@ const config = {
   channelSecret: process.env.CHANNEL_SECRET
 };
 
-const app = WebhookExpress = express();
+const app = express();
 
 const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken
