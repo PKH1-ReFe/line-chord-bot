@@ -132,7 +132,18 @@ async function handleEvent(event) {
         return currentNoteMap[noteNum];
       });
 
+       // ★分数コード（/ があった）場合の厳密チェック＆並び替え処理
       if (slashBase) {
+        // 指定されたベース音が、本来の構成音に「文字として」含まれているかチェック
+        if (!resultNotes.includes(slashBase)) {
+          // 含まれていなければ（例: Eメジャーに対して G が指定されたなど）、エラーにして終了
+          return client.replyMessage({
+            replyToken: event.replyToken,
+            messages: [{ type: 'text', text: '対応するコードが見つかりませんでした' }]
+          });
+        }
+
+        // 完全に含まれていた場合のみ、ベース音を先頭にして近い順にソートする
         const baseNum = NOTE_TO_NUM[slashBase];
         const remainingNotes = resultNotes
           .filter(note => note !== slashBase)
@@ -154,6 +165,7 @@ async function handleEvent(event) {
         messages: [{ type: 'text', text: '対応するコードが見つかりませんでした' }]
       });
     }
+
   }
 }
 
